@@ -5,13 +5,24 @@
 </style></head><body><div class="wrap"><div class="brand"><div><h1>Baby Budget</h1><small>התקציב והרשימה שלנו לקראת הבייבי</small></div></div><div id="login" class="card login"><h2>כניסה</h2><input id="email" type="email" placeholder="אימייל" style="width:100%;box-sizing:border-box;margin-bottom:8px"><input id="password" type="password" placeholder="סיסמה" style="width:100%;box-sizing:border-box;margin-bottom:8px"><button class="primary" onclick="signIn()">התחברות</button><div id="err" class="error"></div></div><div id="main" hidden><div class="controls top-actions"><span id="who" class="muted"></span><span id="saved" class="save-pill"></span><button class="logout" onclick="signOut()">התנתק</button></div><div class="stats"><div class="card"><div class="muted">תקציב נבחר</div><div class="value" id="total">₪0</div></div><div class="card"><div class="muted">הוצאנו עד כה</div><div class="value" id="spent">₪0</div></div><div class="card"><div class="muted">מינימום</div><div class="value" id="minimum">₪0</div></div><div class="card"><div class="muted">מקסימום</div><div class="value" id="maximum">₪0</div></div></div><div class="controls"><input id="q" placeholder="חיפוש..." oninput="render()"><select id="cat" onchange="render()"><option value="">כל הקטגוריות</option></select></div><div id="items"></div></div></div><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script>
 const SUPABASE_URL="https://xewoeopijjgaaqqcyqnp.supabase.co";
 const SUPABASE_KEY="sb_publishable_lYL_i6R15m7h6a9OcMbxlg_OkUfAQDA";
-const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);let rows=[];
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);let rows=[],rtChannel=null;
 const money=n=>"₪"+Math.round(n||0).toLocaleString("he-IL");const e=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function p(r){return r.gift?0:r.min_price+(r.max_price-r.min_price)*(r.slider/100)}
 async function signIn(){err.textContent="";const {error}=await sb.auth.signInWithPassword({email:email.value.trim(),password:password.value});if(error)err.textContent=error.message}
 async function signOut(){await sb.auth.signOut()}
-async function enter(u){login.hidden=true;main.hidden=false;who.textContent=u.email||"";const {data,error}=await sb.from("baby_budget_items").select("*").order("id");if(error){items.innerHTML='<div class="card error">'+e(error.message)+'</div>';return}rows=(data||[]).map(r=>({...r,min_price:+r.min_price,max_price:+r.max_price,slider:+r.slider,enabled:!!r.enabled,purchased:!!r.purchased,gift:!!r.gift}));cat.innerHTML='<option value="">כל הקטגוריות</option>'+[...new Set(rows.map(r=>r.category))].map(x=>'<option>'+e(x)+'</option>').join("");render()}
-function leave(){login.hidden=false;main.hidden=true}
+async function enter(u){login.hidden=true;main.hidden=false;who.textContent=u.email||"";const {data,error}=await sb.from("baby_budget_items").select("*").order("id");if(error){items.innerHTML='<div class="card error">'+e(error.message)+'</div>';return}rows=(data||[]).map(r=>({...r,min_price:+r.min_price,max_price:+r.max_price,slider:+r.slider,enabled:!!r.enabled,purchased:!!r.purchased,gift:!!r.gift}));cat.innerHTML='<option value="">כל הקטגוריות</option>'+[...new Set(rows.map(r=>r.category))].map(x=>'<option>'+e(x)+'</option>').join("");render();startRealtime()}
+function startRealtime(){
+  if(rtChannel)sb.removeChannel(rtChannel);
+  rtChannel=sb.channel("baby-budget-live")
+    .on("postgres_changes",{event:"UPDATE",schema:"public",table:"baby_budget_items"},payload=>{
+      const i=rows.findIndex(r=>r.id===payload.new.id);
+      if(i<0)return;
+      const n=payload.new;
+      rows[i]={...rows[i],...n,min_price:+n.min_price,max_price:+n.max_price,slider:+n.slider,enabled:!!n.enabled,purchased:!!n.purchased,gift:!!n.gift};
+      render();
+    }).subscribe();
+}
+function leave(){if(rtChannel){sb.removeChannel(rtChannel);rtChannel=null}login.hidden=false;main.hidden=true}
 async function save(r,fields){saved.textContent="שומר…";const {error}=await sb.from("baby_budget_items").update(fields).eq("id",r.id);saved.textContent=error?"שגיאה בשמירה":"✓ נשמר";setTimeout(()=>saved.textContent="",1000)}
 function render(){const s=q.value.toLowerCase(),c=cat.value,f=rows.filter(r=>(!s||r.item.toLowerCase().includes(s))&&(!c||r.category===c));items.innerHTML=f.map(r=>'<div class="row '+(!r.enabled?'off ':'')+(r.purchased?'bought ':'')+(r.gift?'gift':'')+'"><input type="checkbox" '+(r.enabled?'checked':'')+' onchange="toggle('+r.id+',\'enabled\',this.checked)"><div><b>'+e(r.item)+'</b><div class="muted">'+e(r.category)+'</div></div><b>'+money(r.enabled?p(r):0)+'</b><div class="slider">'+(r.min_price===r.max_price?'מחיר קבוע':'<input type="range" min="0" max="100" value="'+r.slider+'" onchange="setSlider('+r.id+',this.value)">')+'</div><div class="flags"><label><input type="checkbox" '+(r.purchased?'checked':'')+' onchange="toggle('+r.id+',\'purchased\',this.checked)"> קניתי</label> <label><input type="checkbox" '+(r.gift?'checked':'')+' onchange="toggle('+r.id+',\'gift\',this.checked)"> מתנה</label></div></div>').join("");const a=rows.filter(r=>r.enabled);total.textContent=money(a.reduce((x,r)=>x+p(r),0));minimum.textContent=money(a.reduce((x,r)=>x+(r.gift?0:r.min_price),0));maximum.textContent=money(a.reduce((x,r)=>x+(r.gift?0:r.max_price),0));spent.textContent=money(rows.filter(r=>r.purchased).reduce((x,r)=>x+p(r),0))}
 function toggle(id,k,v){const r=rows.find(x=>x.id===id);if(!r)return;r[k]=v;render();save(r,{[k]:v})}
