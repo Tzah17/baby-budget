@@ -31,7 +31,10 @@ Fields used:
 - `enabled`
 - `purchased`
 - `gift`
-- `type`
+- `type` — `product`, `task`, or `packing`.
+- `completed` — independent preparation / packing checkbox.
+- `needs_purchase` — whether the item needs buying, independent of completion.
+- `archived` — hides redundant records without deleting data.
 - `created_at`
 
 Expected logical types for `enabled`, `purchased`, and `gift` are boolean.
@@ -50,7 +53,9 @@ Expected logical types for `enabled`, `purchased`, and `gift` are boolean.
 - `purchased` is independent of `enabled`.
 - `gift` is independent of `purchased`.
 - Gift price contribution is ₪0.
-- “הוצאנו עד כה” sums current prices for purchased items; gifts contribute zero.
+- “הוצאנו עד כה” sums current prices for purchased items, independently of type, completion, inclusion or needs_purchase; gifts contribute zero. Historical purchases must not disappear when an item is reclassified.
+- Planned total, minimum and maximum include only enabled, non-archived, non-task rows with needs_purchase=true. Gifts contribute zero.
+- Task completion and packing completion have no budget effect.
 - Dashboard: selected budget, spent so far, minimum, maximum.
 
 ## Critical mobile/performance rule
@@ -114,8 +119,25 @@ Before editing:
 
 ## Manual price rollout — 2026-09-30
 - Frontend implemented with backward compatibility: the editor appears only when SELECT * includes the `actual_price` column.
-- Database activation is pending: the connected Supabase tool refused access to this project. Run `database/manual-price.sql` in the project's SQL Editor, then reload both clients.
+- Database activation is complete: `actual_price` was verified present on 2026-09-30.
 - Existing rows default to NULL and keep their current slider prices. No existing data, RLS, Auth, or Realtime configuration is changed.
 - After adding the column, verify manual entry, reload persistence and sync between both authenticated clients. Older already-open versions should be refreshed because they do not understand the override.
+
+## Purchase / task / packing model — 2026-09-30
+- Classify per item, never infer that a whole category must be shopping or tasks.
+- `product`: equipment; `task`: action; `packing`: something to pack or bring.
+- `completed` means "בוצע" for tasks, "ארזתי" for packing and "מוכן" for products already available.
+- `purchased` and `completed` are independent. Buying a TENS does not mean it is packed.
+- All non-task items have "צריך לקנות". Turning it on shows existing price, slider, purchase and gift controls. Turning it off keeps prices and purchase history while excluding future planned expense.
+- Type selector allows partners to correct classifications. Changing to product enables needs_purchase; changing to task/packing disables it. It never resets purchased, completed or prices.
+- Checklist progress reflects visible, non-archived tasks, packing items and products with needs_purchase=false, including enabled=false tasks. Disabled-budget status must not hide or fade tasks.
+- Existing task records and documents were classified; station organization and food preparation are tasks. Packing supplies default to already available, except snacks, cord kit and the previously purchased TENS. Missing supplies can be flagged for buying.
+- Baby clothes moved from room/sleep to clothing/textiles; sprays moved to postpartum; packing supplies moved out of pre-birth tasks.
+- Three untouched companion duplicates are archived, not deleted. Purchased, gifted or manually priced duplicates are preserved.
+- Database setup: applied schema migration `add_checklist_and_packing_state`; `database/checklists.sql` records its schema and one-time classification changes. Do not rerun classification after users make edits.
+- Existing RLS policies and UPDATE Realtime publication are preserved. Realtime spreads new row fields and normalizes the corresponding local row.
+- Checkbox/type actions update locally and issue one UPDATE; failed writes revert if no newer change superseded them. Slider performance rule remains unchanged.
+- Validation: all rendered inline handlers compile; functional checks cover budget exclusion, history, independent completion, exact prices, slider reset, failed writes and Realtime payload handling. Database completion persistence checked in a rolled-back transaction. iPhone visual validation still requires an actual browser.
+- Both clients must reload after deployment to use the new fields.
 
 Keep this file updated when architecture or important behavioral decisions change.
