@@ -27,6 +27,7 @@ Fields used:
 - `min_price`
 - `max_price`
 - `slider` — integer 0–100
+- `actual_price` — nullable numeric(12,2), nonnegative exact manual price override.
 - `enabled`
 - `purchased`
 - `gift`
@@ -38,8 +39,13 @@ Expected logical types for `enabled`, `purchased`, and `gift` are boolean.
 ## Budget rules
 - Slider 0% means `min_price`, NOT zero.
 - Slider 100% means `max_price`.
-- Current price = min + (max-min) × slider/100.
-- If min=max, display a fixed price.
+- Current price = `actual_price` when non-null, otherwise min + (max-min) × slider/100.
+- Manual entry accepts zero and up to two decimal places, including outside the original range. Never overwrite `min_price` / `max_price` to store a paid price.
+- Manual entry is saved on `change` (blur / Enter), never per keystroke. Emptying it restores the slider price.
+- Moving the slider clears `actual_price` in the same UPDATE. Manual entry aligns the slider to the nearest in-range integer percentage, but the exact manual price remains authoritative.
+- The price field is also available for fixed-range items; gifts remain zero and their field is disabled.
+- Typing a price does not mark an item purchased. Existing purchased/enabled/gift rules still apply.
+- If min=max, omit the slider; manual price editing is still available.
 - `enabled=false` excludes the item from planned-budget totals.
 - `purchased` is independent of `enabled`.
 - `gift` is independent of `purchased`.
@@ -105,5 +111,11 @@ Before editing:
 - Mobile layout works.
 - Earlier iPhone slider crashes were resolved by removing continuous render/write behavior.
 - Supabase Realtime sync between two open clients has been tested by the owner and works.
+
+## Manual price rollout — 2026-09-30
+- Frontend implemented with backward compatibility: the editor appears only when SELECT * includes the `actual_price` column.
+- Database activation is pending: the connected Supabase tool refused access to this project. Run `database/manual-price.sql` in the project's SQL Editor, then reload both clients.
+- Existing rows default to NULL and keep their current slider prices. No existing data, RLS, Auth, or Realtime configuration is changed.
+- After adding the column, verify manual entry, reload persistence and sync between both authenticated clients. Older already-open versions should be refreshed because they do not understand the override.
 
 Keep this file updated when architecture or important behavioral decisions change.
