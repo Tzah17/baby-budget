@@ -4,11 +4,24 @@
 @media(max-width:700px){.wrap{padding:10px}.brand h1{font-size:27px}.stats{grid-template-columns:1fr 1fr}.value{font-size:20px}.grid{grid-template-columns:1fr}.item{padding:13px 11px}.detail{grid-column:1/4}.controls input,.controls select{min-height:46px}.nav{margin:0 -10px;padding:10px}.brand .muted{display:none}}
 
 @media(max-width:700px){html,body{max-width:100%;overflow-x:hidden}.wrap{width:100%;min-width:0}.item{grid-template-columns:28px minmax(0,1fr);gap:8px;align-items:start}.item>input[type=checkbox]{grid-column:1;grid-row:1;margin-top:5px}.item>div:nth-child(2){grid-column:2;grid-row:1;min-width:0}.item>b:last-child{grid-column:2;grid-row:2;justify-self:start;white-space:nowrap;font-size:17px}.item-title{overflow-wrap:anywhere;line-height:1.35;font-size:17px}.slider{min-width:0;display:grid;grid-template-columns:minmax(0,1fr) 100px;gap:10px;align-items:center}.slider input[type=range]{width:100%;min-width:0}.price{width:100%;min-width:0;font-size:16px}.flags{gap:8px}.flags label{display:inline-flex;align-items:center;gap:5px;min-height:42px;white-space:nowrap}.controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.controls input{grid-column:1/-1;min-width:0;width:100%}.controls select{width:100%;min-width:0;font-size:14px;padding:10px 7px}.stats .card{min-width:0;padding:12px}.stats .value{font-size:clamp(18px,5vw,23px);overflow-wrap:anywhere}}
-</style></head><body><div class="wrap"><div class="brand"><div><h1>Baby Hub</h1><div class="muted">כל ההכנות לבייבי במקום אחד</div></div><span id="saved" class="save"></span></div>
+.item-actions,.editor-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.item-actions button,.editor-actions button,.add-item{min-height:44px}.item-actions button{padding:6px 12px;font-size:14px}.remove-item{color:#963e39}.editor{width:min(460px,calc(100% - 24px));max-height:calc(100% - 24px);margin:auto;border:1px solid var(--line);border-radius:18px;background:var(--paper);color:var(--ink);padding:18px;overflow:auto}.editor::backdrop{background:#34262066}.editor h2{margin:0 0 12px}.editor label:not(.editor-check){display:grid;gap:5px;margin:10px 0}.editor input,.editor select{min-width:0;font-size:16px;min-height:44px}.editor input[type=checkbox]{min-height:0}.editor .editor-check{display:flex;gap:8px;align-items:center;min-height:44px}.editor-range{display:grid;grid-template-columns:1fr 1fr;gap:10px}.editor-range[hidden],.editor-check[hidden]{display:none}.editor-actions{justify-content:flex-end}.item-toolbar{margin:12px 0}
+</style></head><body><div class="wrap"><div class="brand"><div><h1>Baby Hub</h1><div class="muted">כל ההכנות לבייבי במקום אחד</div></div><span id="saved" class="save" role="status"></span></div>
 <div id="login" class="card login"><h2>כניסה</h2><input id="email" type="email" placeholder="אימייל"><input id="password" type="password" placeholder="סיסמה"><button class="primary" onclick="signIn()">התחברות</button><div id="err" class="error"></div></div>
 <div id="main" hidden><div class="top"><span id="who" class="muted"></span><button onclick="signOut()">התנתק</button></div><nav class="nav" id="nav"></nav><main id="view"></main></div></div>
+<dialog id="itemEditor" class="editor" aria-labelledby="editorTitle" oncancel="if(editorBusy)event.preventDefault()">
+<form id="itemForm" onsubmit="event.preventDefault();submitItem()">
+<h2 id="editorTitle"></h2>
+<label>שם הפריט<input id="itemName" required maxlength="180" autofocus></label>
+<label>קטגוריה<input id="itemCategory" list="itemCategories" required maxlength="100"></label><datalist id="itemCategories"></datalist>
+<label>סוג הפריט<select id="itemType" onchange="editorFields()"><option value="product">קנייה</option><option value="task">משימה</option><option value="packing">אריזה</option></select></label>
+<label id="itemNeedLabel" class="editor-check"><input id="itemNeed" type="checkbox" onchange="editorFields()"> צריך לקנות</label>
+<div id="itemRange" class="editor-range"><label>מחיר מינימום (₪)<input id="itemMin" type="number" min="0" max="9999999999.99" step=".01" inputmode="decimal" placeholder="0"></label><label>מחיר מקסימום (₪)<input id="itemMax" type="number" min="0" max="9999999999.99" step=".01" inputmode="decimal" placeholder="0"></label></div>
+<p id="editorError" class="error" role="alert" hidden></p>
+<div class="editor-actions"><button id="itemCancel" type="button" onclick="$('itemEditor').close()">ביטול</button><button id="itemSubmit" type="submit" class="primary">שמירה</button></div>
+</form></dialog>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script>
 const sb=supabase.createClient("https://xewoeopijjgaaqqcyqnp.supabase.co","sb_publishable_lYL_i6R15m7h6a9OcMbxlg_OkUfAQDA");
+let editorDraft=null,editorBusy=false;
 let rows=[],checks=[],safety=[],page="home",rt=null,filter="",category="",purchaseFilter="",priceSort="";
 const $=id=>document.getElementById(id),esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])),money=n=>"₪"+Number(n||0).toLocaleString("he-IL",{maximumFractionDigits:2});
 const kind=r=>["task","packing"].includes(r.type)?r.type:"product",need=r=>r.needs_purchase==null?kind(r)==="product":!!r.needs_purchase;
@@ -19,19 +32,81 @@ function go(p){page=p;filter="";category="";purchaseFilter="";priceSort="";nav()
 async function signIn(){err.textContent="";const {error}=await sb.auth.signInWithPassword({email:email.value.trim(),password:password.value});if(error)err.textContent=error.message}
 async function signOut(){await sb.auth.signOut()}
 async function enter(u){login.hidden=true;main.hidden=false;who.textContent=u.email||"";const [a,b,c]=await Promise.all([sb.from("baby_budget_items").select("*").order("id"),sb.from("pregnancy_checks").select("*").order("id"),sb.from("safety_notes").select("*").order("id")]);if(a.error){view.innerHTML='<div class="card error">'+esc(a.error.message)+'</div>';return}rows=(a.data||[]).map(norm);checks=b.data||[];safety=c.data||[];nav();render();realtime()}
-function leave(){if(rt){sb.removeChannel(rt);rt=null}login.hidden=false;main.hidden=true}
-function realtime(){if(rt)sb.removeChannel(rt);rt=sb.channel("baby-hub-v2").on("postgres_changes",{event:"UPDATE",schema:"public",table:"baby_budget_items"},x=>{const i=rows.findIndex(r=>r.id===x.new.id);if(i>=0){rows[i]=norm({...rows[i],...x.new});render()}}).on("postgres_changes",{event:"UPDATE",schema:"public",table:"pregnancy_checks"},x=>{const i=checks.findIndex(r=>r.id===x.new.id);if(i>=0){checks[i]=x.new;render()}}).subscribe()}
+function leave(){$("itemEditor").close();if(rt){sb.removeChannel(rt);rt=null}login.hidden=false;main.hidden=true}
+function realtime(){if(rt)sb.removeChannel(rt);rt=sb.channel("baby-hub-v2").on("postgres_changes",{event:"UPDATE",schema:"public",table:"baby_budget_items"},x=>applyItem(x.new)).on("postgres_changes",{event:"INSERT",schema:"public",table:"baby_budget_items"},x=>applyItem(x.new)).on("postgres_changes",{event:"UPDATE",schema:"public",table:"pregnancy_checks"},x=>{const i=checks.findIndex(r=>r.id===x.new.id);if(i>=0){checks[i]=x.new;render()}}).subscribe()}
 async function save(table,id,fields){saved.textContent="שומר…";const {error}=await sb.from(table).update(fields).eq("id",id);saved.textContent=error?"שגיאה":"✓ נשמר";setTimeout(()=>saved.textContent="",900)}
 function stats(){const a=rows.filter(r=>!r.archived&&r.enabled&&kind(r)!=="task"&&need(r));return {total:a.reduce((s,r)=>s+price(r),0),spent:rows.filter(r=>r.purchased).reduce((s,r)=>s+price(r),0),min:a.reduce((s,r)=>s+(r.gift?0:r.min_price),0),max:a.reduce((s,r)=>s+(r.gift?0:r.max_price),0)}}
 function statCards(){const s=stats();return '<div class="stats">'+[["תקציב נבחר",s.total],["הוצאנו",s.spent],["מינימום",s.min],["מקסימום",s.max]].map(x=>'<div class="card"><div class="muted">'+x[0]+'</div><div class="value">'+money(x[1])+'</div></div>').join("")+'</div>'}
 function pct(done,total){return total?Math.round(done/total*100):0}
 function home(){const active=rows.filter(r=>!r.archived),prep=active.filter(r=>kind(r)==="task"),bag=active.filter(r=>kind(r)==="packing"),next=checks.find(r=>!r.completed);const pd=prep.filter(r=>r.completed).length,bd=bag.filter(r=>r.completed).length,cd=checks.filter(r=>r.completed).length;return '<div class="card hero"><h2>מרכז ההכנות שלכם 👶</h2><div>קניות, הכנות, תיק לידה ובדיקות — מסונכרן לשניכם בזמן אמת.</div></div>'+statCards()+'<div class="grid"><div class="card"><b>✓ הכנות לפני הלידה</b><div class="value">'+pd+' / '+prep.length+'</div><div class="progress"><i style="width:'+pct(pd,prep.length)+'%"></i></div></div><div class="card"><b>👜 תיק לידה</b><div class="value">'+bd+' / '+bag.length+'</div><div class="progress"><i style="width:'+pct(bd,bag.length)+'%"></i></div></div><div class="card"><b>🩺 מעקב בדיקות</b><div class="value">'+cd+' / '+checks.length+'</div><div class="progress"><i style="width:'+pct(cd,checks.length)+'%"></i></div></div><div class="card"><b>הבא בתור</b><div class="value" style="font-size:18px">'+esc(next?next.test_name:"הכול מסומן ✓")+'</div>'+(next?'<div class="muted">'+esc(next.test_date_text||next.week_text||"ללא תאריך")+'</div>':"")+'</div></div>'}
 function filters(list){const cats=[...new Set(list.map(r=>r.category))];return '<div class="controls"><input placeholder="חיפוש..." value="'+esc(filter)+'" oninput="filter=this.value;render()"><select onchange="category=this.value;render()"><option value="">כל הקטגוריות</option>'+cats.map(c=>'<option '+(category===c?'selected':'')+'>'+esc(c)+'</option>').join("")+'</select>'+(page==="budget"?'<select aria-label="סינון לפי מצב קנייה" onchange="purchaseFilter=this.value;render()"><option value="">כל המצבים</option>'+[["purchased","קניתי"],["gift","מתנה"],["empty","ריק — לא קניתי ולא מתנה"]].map(([v,t])=>'<option value="'+v+'" '+(purchaseFilter===v?'selected':'')+'>'+t+'</option>').join("")+'</select><select aria-label="מיון לפי מחיר" onchange="priceSort=this.value;render()"><option value="">סדר מקורי</option><option value="asc" '+(priceSort==="asc"?'selected':'')+'>מחיר: מהנמוך לגבוה</option><option value="desc" '+(priceSort==="desc"?'selected':'')+'>מחיר: מהגבוה לנמוך</option></select>':"")+'</div>'}
-function rowItem(r,mode){const isBudget=mode==="budget",done=isBudget?r.purchased:r.completed;let detail='<div class="meta"><span class="chip">'+esc(r.category)+'</span>'+(r.type?'<span class="chip">'+(kind(r)==="task"?"משימה":kind(r)==="packing"?"אריזה":"קנייה")+'</span>':"")+'</div>';if(isBudget&&need(r)){detail+='<div class="slider">'+(r.min_price===r.max_price?"":'<input type="range" min="0" max="100" value="'+r.slider+'" onchange="setSlider('+r.id+',this.value)">')+'<input class="price" type="number" min="0" step=".01" value="'+Number(price(r).toFixed(2))+'" '+(r.gift?"disabled":"")+' onchange="setPrice('+r.id+',this.value)"></div><div class="flags"><label><input type="checkbox" '+(r.purchased?"checked":"")+' onchange="toggleRow('+r.id+',\'purchased\',this.checked)"> קניתי</label><label><input type="checkbox" '+(r.gift?"checked":"")+' onchange="toggleRow('+r.id+',\'gift\',this.checked)"> מתנה</label></div>'}return '<div class="item '+(done?"done ":"")+(isBudget&&!r.enabled?"off":"")+'"><input type="checkbox" '+(isBudget?(r.enabled?"checked":""):(r.completed?"checked":""))+' onchange="toggleRow('+r.id+',\''+(isBudget?"enabled":"completed")+'\',this.checked)"><div><div class="item-title">'+esc(r.item)+'</div>'+detail+'</div><b>'+(isBudget&&need(r)?money(price(r)):(done?"✓":""))+'</b></div>'}
-function listPage(mode){let list=rows.filter(r=>!r.archived);if(mode==="budget")list=list.filter(r=>kind(r)!=="task"&&need(r));if(mode==="prep")list=list.filter(r=>kind(r)==="task"||(kind(r)==="product"&&!need(r)));if(mode==="bag")list=list.filter(r=>kind(r)==="packing");const f=filter.toLowerCase();list=list.filter(r=>(!f||r.item.toLowerCase().includes(f))&&(!category||r.category===category)&&(mode!=="budget"||!purchaseFilter||(purchaseFilter==="purchased"&&r.purchased)||(purchaseFilter==="gift"&&r.gift)||(purchaseFilter==="empty"&&!r.purchased&&!r.gift)));if(mode==="budget"&&priceSort)list.sort((a,b)=>priceSort==="asc"?price(a)-price(b)||a.id-b.id:price(b)-price(a)||a.id-b.id);return (mode==="budget"?statCards():"")+filters(rows.filter(r=>!r.archived))+(list.length?list.map(r=>rowItem(r,mode)).join(""):'<div class="empty">אין פריטים להצגה</div>')}
+function rowItem(r,mode){const isBudget=mode==="budget",done=isBudget?r.purchased:r.completed;let detail='<div class="meta"><span class="chip">'+esc(r.category)+'</span>'+(r.type?'<span class="chip">'+(kind(r)==="task"?"משימה":kind(r)==="packing"?"אריזה":"קנייה")+'</span>':"")+'</div>';if(isBudget&&need(r)){detail+='<div class="slider">'+(r.min_price===r.max_price?"":'<input type="range" min="0" max="100" value="'+r.slider+'" onchange="setSlider('+r.id+',this.value)">')+'<input class="price" type="number" min="0" step=".01" value="'+Number(price(r).toFixed(2))+'" '+(r.gift?"disabled":"")+' onchange="setPrice('+r.id+',this.value)"></div><div class="flags"><label><input type="checkbox" '+(r.purchased?"checked":"")+' onchange="toggleRow('+r.id+',\'purchased\',this.checked)"> קניתי</label><label><input type="checkbox" '+(r.gift?"checked":"")+' onchange="toggleRow('+r.id+',\'gift\',this.checked)"> מתנה</label></div>'}return '<div class="item '+(done?"done ":"")+(isBudget&&!r.enabled?"off":"")+'"><input type="checkbox" '+(isBudget?(r.enabled?"checked":""):(r.completed?"checked":""))+' onchange="toggleRow('+r.id+',\''+(isBudget?"enabled":"completed")+'\',this.checked)"><div><div class="item-title">'+esc(r.item)+'</div>'+detail+'<div class="item-actions"><button type="button" onclick="openItem('+r.id+')">עריכה</button><button type="button" class="remove-item" onclick="removeItem('+r.id+',this)">מחיקה</button></div></div><b>'+(isBudget&&need(r)?money(price(r)):(done?"✓":""))+'</b></div>'}
+function listPage(mode){let list=rows.filter(r=>!r.archived);if(mode==="budget")list=list.filter(r=>kind(r)!=="task"&&need(r));if(mode==="prep")list=list.filter(r=>kind(r)==="task"||(kind(r)==="product"&&!need(r)));if(mode==="bag")list=list.filter(r=>kind(r)==="packing");const f=filter.toLowerCase();list=list.filter(r=>(!f||r.item.toLowerCase().includes(f))&&(!category||r.category===category)&&(mode!=="budget"||!purchaseFilter||(purchaseFilter==="purchased"&&r.purchased)||(purchaseFilter==="gift"&&r.gift)||(purchaseFilter==="empty"&&!r.purchased&&!r.gift)));if(mode==="budget"&&priceSort)list.sort((a,b)=>priceSort==="asc"?price(a)-price(b)||a.id-b.id:price(b)-price(a)||a.id-b.id);return (mode==="budget"?statCards():"")+'<div class="item-toolbar"><button type="button" class="primary add-item" onclick="openItem()">+ הוספת פריט</button></div>'+filters(rows.filter(r=>!r.archived))+(list.length?list.map(r=>rowItem(r,mode)).join(""):'<div class="empty">אין פריטים להצגה</div>')}
 function checksPage(){return '<div class="card"><b>מעקב הריון</b><div class="muted">המידע כאן הועתק מהטאב "בדיקות" בקובץ שסיפקתם. הוא לא תחליף להנחיות הצוות הרפואי.</div></div>'+["שליש ראשון","שליש שני","שליש שלישי"].map(t=>{const a=checks.filter(x=>x.trimester===t);return '<h3 class="section-title">'+t+'</h3>'+a.map(x=>'<div class="item '+(x.completed?'done':'')+'"><input type="checkbox" '+(x.completed?'checked':'')+' onchange="toggleCheck('+x.id+',this.checked)"><div><div class="item-title">'+esc(x.test_name)+'</div><div class="meta">'+(x.week_text?'<span class="chip">שבוע '+esc(x.week_text)+'</span>':'')+(x.test_date_text?'<span class="chip">'+esc(x.test_date_text)+'</span>':'')+(x.date_window?'<span class="chip">'+esc(x.date_window)+'</span>':'')+'</div></div><b>'+(x.completed?'✓':'')+'</b></div>').join("")}).join("")}
 function safetyPage(){return '<div class="card"><b>הערות בטיחות מהקובץ</b><div class="muted">מוצגות כפי שנשמרו במקור, יחד עם קישור המקור כשקיים.</div></div>'+safety.map(x=>'<div class="card safety"><b>'+esc(x.topic)+'</b><p>'+esc(x.important)+'</p>'+(x.impact?'<div class="muted">'+esc(x.impact)+'</div>':'')+(x.source_url?'<p><a class="link" href="'+esc(x.source_url)+'" target="_blank" rel="noopener">מקור מקצועי ↗</a></p>':'')+'</div>').join("")}
 function render(){const active=document.activeElement,searchFocused=active&&active.getAttribute&&active.getAttribute("placeholder")==="חיפוש...",pos=searchFocused&&typeof active.selectionStart==="number"?active.selectionStart:null;if(page==="home")view.innerHTML=home();else if(page==="budget")view.innerHTML=listPage("budget");else if(page==="prep")view.innerHTML=listPage("prep");else if(page==="bag")view.innerHTML=listPage("bag");else if(page==="checks")view.innerHTML=checksPage();else view.innerHTML=safetyPage();if(searchFocused){const input=view.querySelector('input[placeholder="חיפוש..."]');if(input){input.focus({preventScroll:true});if(pos!==null)input.setSelectionRange(pos,pos)}}}
+function applyItem(row){
+  const i=rows.findIndex(r=>r.id===row.id);
+  if(i<0){rows.push(norm(row));rows.sort((a,b)=>a.id-b.id)}else rows[i]=norm({...rows[i],...row});
+  render();
+}
+function editorFields(){
+  const task=$("itemType").value==="task",show=!task&&$("itemNeed").checked&&!editorDraft?.purchased;
+  $("itemNeedLabel").hidden=task;$("itemNeed").disabled=task;
+  $("itemRange").hidden=!show;$("itemMin").disabled=!show;$("itemMax").disabled=!show;
+}
+function editorError(message){const el=$("editorError");el.textContent=message;el.hidden=!message}
+function openItem(id){
+  if(editorBusy)return;
+  const row=id==null?null:rows.find(r=>r.id===id&&!r.archived);
+  if(id!=null&&!row)return;
+  editorDraft=row?{...row}:null;
+  $("itemForm").reset();
+  $("editorTitle").textContent=row?"עריכת פריט":"הוספת פריט";
+  $("itemName").value=row?.item??"";
+  $("itemCategory").value=row?.category??(category||(page==="prep"?"משימות לפני הלידה":page==="bag"?"תיק לידה ואשפוז":""));
+  $("itemCategories").replaceChildren(...[...new Set(rows.filter(r=>!r.archived).map(r=>r.category))].sort((a,b)=>a.localeCompare(b,"he")).map(c=>new Option(c,c)));
+  $("itemType").value=row?kind(row):page==="prep"?"task":page==="bag"?"packing":"product";
+  $("itemNeed").checked=row?need(row):page==="budget";
+  $("itemMin").value=row?.min_price??"";$("itemMax").value=row?.max_price??"";
+  editorError("");editorFields();$("itemEditor").showModal();
+}
+async function submitItem(){
+  if(editorBusy)return;
+  const draft=editorDraft,item=$("itemName").value.trim(),category=$("itemCategory").value.trim(),type=$("itemType").value;
+  if(!item||!category){editorError("יש למלא שם וקטגוריה.");return}
+  const needs_purchase=type!=="task"&&$("itemNeed").checked;
+  const fields={item,category,type,needs_purchase};
+  const current=draft&&rows.find(r=>r.id===draft.id);
+  if(draft&&(!current||current.archived)){editorError("הפריט כבר הוסר מהרשימה.");return}
+  if(needs_purchase&&!draft?.purchased&&!current?.purchased){
+    const min=Number($("itemMin").value||0),max=Number($("itemMax").value||min);
+    if(!Number.isFinite(min)||!Number.isFinite(max)||min<0||max<min){editorError("מחיר המקסימום צריך להיות לפחות מחיר המינימום.");return}
+    fields.min_price=min;fields.max_price=max;
+  }
+  if(draft)for(const key of Object.keys(fields))if(fields[key]===draft[key])delete fields[key];
+  if(draft&&!Object.keys(fields).length){$("itemEditor").close();return}
+  editorBusy=true;$("itemSubmit").disabled=true;$("itemCancel").disabled=true;editorError("");
+  try{
+    const table=sb.from("baby_budget_items");
+    const request=draft?table.update(fields).eq("id",draft.id).eq("archived",false):table.insert(fields);
+    const {data,error}=await request.select("*").maybeSingle();
+    if(error||!data){editorError("השמירה נכשלה. נסו שוב.");return}
+    $("itemEditor").close();applyItem(data);
+    if(!draft)go(type==="task"?"prep":type==="packing"?"bag":needs_purchase?"budget":"prep");
+    saved.textContent="✓ נשמר";
+  }catch{editorError("השמירה נכשלה. בדקו את החיבור ונסו שוב.")}
+  finally{editorBusy=false;$("itemSubmit").disabled=false;$("itemCancel").disabled=false}
+}
+async function removeItem(id,button){
+  const row=rows.find(r=>r.id===id&&!r.archived);if(!row||!confirm("להסיר את ״"+row.item+"״ מהרשימה?"+(row.purchased?" ההוצאה שכבר נרשמה תישמר.":"")))return;
+  button.disabled=true;saved.textContent="מסיר…";
+  try{
+    const {data,error}=await sb.from("baby_budget_items").update({archived:true}).eq("id",id).eq("archived",false).select("*").maybeSingle();
+    if(error||!data)throw Error("remove failed");
+    applyItem(data);saved.textContent="✓ הוסר";
+  }catch{saved.textContent="ההסרה נכשלה. נסו שוב.";button.disabled=false}
+}
 function toggleRow(id,k,v){const r=rows.find(x=>x.id===id);if(!r)return;r[k]=v;render();save("baby_budget_items",id,{[k]:v})}
 function toggleCheck(id,v){const r=checks.find(x=>x.id===id);if(!r)return;r.completed=v;render();save("pregnancy_checks",id,{completed:v})}
 function setSlider(id,v){const r=rows.find(x=>x.id===id);if(!r)return;r.slider=+v;r.actual_price=null;render();save("baby_budget_items",id,{slider:r.slider,actual_price:null})}

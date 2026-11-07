@@ -43,7 +43,7 @@ V2 staging/extension table created for richer workbook metadata. Do not depend o
 Never render or write to Supabase continuously during range input dragging. Slider commits only on change/release. Avoid expensive full-list work on touchmove/input. This previously caused Safari instability.
 
 ## Realtime
-baby_budget_items and pregnancy_checks are in supabase_realtime. V2 listens for UPDATE on both. Safety notes are read-only.
+baby_budget_items and pregnancy_checks are in supabase_realtime. The UI listens for INSERT and UPDATE on baby_budget_items and UPDATE on pregnancy_checks. Item updates and inserts merge into the local list by ID, including archived rows for expense history. Safety notes are read-only.
 
 ## Source workbook
 The V2 concept and pregnancy/safety content came from the uploaded birth checklist workbook. Preserve source wording rather than silently changing medical/safety guidance. The workbook also contains richer MASTER metadata (priority, quantity, when needed, notes, shopping links) that can be imported in a later iteration.
@@ -57,3 +57,9 @@ Before editing, fetch latest main and read this file + index.html. Both partners
 - prep_items created and initialized as a safe extension path.
 - Existing baby_budget_items preserved; no destructive migration.
 - GitHub V2 frontend committed to main.
+
+## Manage list items — 2026-11-07
+- Add, edit and remove items in Budget, Preparations and Hospital Bag. The editor is outside the rendered list so Realtime updates do not discard an open form.
+- Use server-generated item IDs: omit id in new inserts. The Supabase migration baby_budget_items_generated_id initializes the identity sequence above the existing IDs; see database/item-identity.sql for the applied SQL.
+- Edit name, category, type, needs_purchase and unpurchased price bounds. Purchased prices remain editable in the existing inline price field. Only changed fields are sent on edit.
+- Removal archives the row after confirmation. Archived items are hidden from lists and planned totals; any recorded expense still contributes to spent. No item is physically deleted by this UI.
