@@ -63,3 +63,10 @@ Before editing, fetch latest main and read this file + index.html. Both partners
 - Use server-generated item IDs: omit id in new inserts. The Supabase migration baby_budget_items_generated_id initializes the identity sequence above the existing IDs; see database/item-identity.sql for the applied SQL.
 - Edit name, category, type, needs_purchase and unpurchased price bounds. Purchased prices remain editable in the existing inline price field. Only changed fields are sent on edit.
 - Removal archives the row after confirmation. Archived items are hidden from lists and planned totals; any recorded expense still contributes to spent. No item is physically deleted by this UI.
+
+## Weekly checklist — 2026-11-18
+- New tab "📅 לפי שבוע" for an initially empty, user-authored pregnancy-week checklist.
+- Add task with title and week (1–42); tasks group in ascending week order; each has independent completed checkbox and delete confirmation.
+- Table public.weekly_tasks (id identity, week, title, completed, created_at). Migration add_weekly_tasks_checklist applied.
+- RLS permits only the two existing partner auth user IDs for select/insert/update/delete; authenticated API grants; table added to supabase_realtime.
+- UI subscribes to INSERT/UPDATE/DELETE and updates the shared in-memory list. No preloaded tasks.
