@@ -70,3 +70,9 @@ Before editing, fetch latest main and read this file + index.html. Both partners
 - Table public.weekly_tasks (id identity, week, title, completed, created_at). Migration add_weekly_tasks_checklist applied.
 - RLS permits only the two existing partner auth user IDs for select/insert/update/delete; authenticated API grants; table added to supabase_realtime.
 - UI subscribes to INSERT/UPDATE/DELETE and updates the shared in-memory list. No preloaded tasks.
+
+## Weekly dates and Google Calendar — 2026-11-18
+- User-specified anchor: week 30 starts 2026-11-19. Week n starts 7*(n-30) days from that date; show start/end dates and preview on week input.
+- Each task opens a prefilled Google Calendar all-day event on the first day of its week using a Calendar template URL. This opens a draft; Google does not provide a callback confirming save.
+- User explicitly confirms calendar addition with "הוספתי ליומן". Only then set weekly_tasks.calendar_added=true; allow unmarking. State syncs via existing weekly_tasks Realtime UPDATE.
+- Migration weekly_tasks_calendar_tracking adds calendar_added boolean default false. No Google account permissions or tokens stored.
