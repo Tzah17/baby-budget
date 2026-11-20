@@ -76,3 +76,9 @@ Before editing, fetch latest main and read this file + index.html. Both partners
 - Each task opens a prefilled Google Calendar all-day event on the first day of its week using a Calendar template URL. This opens a draft; Google does not provide a callback confirming save.
 - User explicitly confirms calendar addition with "הוספתי ליומן". Only then set weekly_tasks.calendar_added=true; allow unmarking. State syncs via existing weekly_tasks Realtime UPDATE.
 - Migration weekly_tasks_calendar_tracking adds calendar_added boolean default false. No Google account permissions or tokens stored.
+
+## Purchase timing — 2026-11-20
+- Added nullable text column `baby_budget_items.purchase_timing` with values `before_birth`, `first_days`, `months_1_3`, `months_3_6`, `months_6_plus`, `as_needed`. A database CHECK constraint limits values.
+- Seeded the 100 currently active product rows with suggested timing based on product type; all timing suggestions are editable, not medical mandates. Tasks/packing checklist rows retain null timing.
+- Budget page displays timing chips and a timing filter; item editor exposes purchase timing for products. Item updates sync through existing Realtime.
+- Existing prices, purchased status, gifts, completed status and expense calculations are unchanged.
